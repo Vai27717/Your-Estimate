@@ -407,13 +407,76 @@ const convertNumberToEnglishWords = (num) => {
     return 'Rupees ' + words.trim() + ' Only';
 };
             
+
+            // Show fixed cost breakdown only for Construction / New Construction estimates.
+            const shouldShowCostBreakdown = (workTitle) => {
+                const title = String(workTitle || '').trim().toLowerCase();
+                return title === 'construction' || title === 'new construction';
+            };
+
+            // Avoid showing the fixed breakdown twice when an older estimate has it saved in Description.
+            const getCleanItemDescription = (description, workTitle) => {
+                const value = String(description || '').trim();
+                if (shouldShowCostBreakdown(workTitle) && /material\s+cost\s*\(\s*per\s*1\s*sq\.?\s*ft\.?\s*\)|work\s+cost\s*\(\s*per\s*1\s*sq\.?\s*ft\.?\s*\)|labour\s+and\s+material\s*\(\s*per\s*1\s*sq\.?\s*ft\.?\s*\)/i.test(value)) {
+                    return '';
+                }
+                return value;
+            };
+
+            // --- Fixed Cost Breakdown (PDF and Customer View) ---
+            const costBreakdownPdfHtml = () => `
+                <div style="margin-top:20px;font-family:Arial,sans-serif;">
+                    <div style="page-break-inside:avoid;break-inside:avoid;margin-bottom:16px;">
+                        <h3 style="font-size:16px;line-height:1.35;font-weight:bold;margin:0 0 8px;padding:2px 0;page-break-after:avoid;break-after:avoid;">Material Cost (Per 1 Sq.ft.)</h3>
+                        <table style="width:100%;border-collapse:collapse;margin:0;page-break-inside:avoid;break-inside:avoid;">
+                            <thead style="display:table-header-group;"><tr style="background:#f2f2f2;page-break-inside:avoid;break-inside:avoid;"><th style="border:1px solid #ddd;padding:7px;text-align:left;">Material</th><th style="border:1px solid #ddd;padding:7px;text-align:right;">Percentage</th><th style="border:1px solid #ddd;padding:7px;text-align:right;">Cost</th></tr></thead>
+                            <tbody>${[['Cement','16.4%','₹246'],['Sand','12.3%','₹185'],['Aggregate','7.4%','₹111'],['Reinforcement (Steel)','24.6%','₹369'],['Finishers','16.5%','₹248'],['Fitting','22.8%','₹342']].map(r=>`<tr style="page-break-inside:avoid;break-inside:avoid;">${r.map((v,i)=>`<td style="border:1px solid #ddd;padding:7px;line-height:1.25;${i?'text-align:right;':''}">${v}</td>`).join('')}</tr>`).join('')}</tbody>
+                        </table>
+                    </div>
+                    <div style="page-break-inside:avoid;break-inside:avoid;margin-bottom:16px;">
+                        <h3 style="font-size:16px;line-height:1.35;font-weight:bold;margin:0 0 8px;padding:2px 0;page-break-after:avoid;break-after:avoid;">Work Cost (Per 1 Sq.ft.)</h3>
+                        <table style="width:100%;border-collapse:collapse;margin:0;page-break-inside:avoid;break-inside:avoid;">
+                            <thead style="display:table-header-group;"><tr style="background:#f2f2f2;page-break-inside:avoid;break-inside:avoid;"><th style="border:1px solid #ddd;padding:7px;text-align:left;">Sr. No.</th><th style="border:1px solid #ddd;padding:7px;text-align:left;">Work</th><th style="border:1px solid #ddd;padding:7px;text-align:right;">Cost</th></tr></thead>
+                            <tbody>${[['Excavation','₹45'],['Foundation','₹180'],['RCC','₹345'],['Bricks Work','₹135'],['Plaster','₹90'],['Flooring','₹150'],['Electrical','₹120'],['Plumbing','₹105'],['Doors','₹60'],['Grill & Sliding Window','₹120'],['Paint','₹75'],['Transportation and Other','₹75']].map((r,i)=>`<tr style="page-break-inside:avoid;break-inside:avoid;"><td style="border:1px solid #ddd;padding:7px;line-height:1.25;">${i+1}</td><td style="border:1px solid #ddd;padding:7px;line-height:1.25;">${r[0]}</td><td style="border:1px solid #ddd;padding:7px;text-align:right;line-height:1.25;">${r[1]}</td></tr>`).join('')}</tbody>
+                        </table>
+                    </div>
+                    <div style="page-break-inside:avoid;break-inside:avoid;margin-bottom:0;">
+                        <h3 style="font-size:16px;line-height:1.35;font-weight:bold;margin:0 0 8px;padding:2px 0;page-break-after:avoid;break-after:avoid;">Labour And Material (Per 1 Sq.ft.)</h3>
+                        <table style="width:100%;border-collapse:collapse;margin:0;page-break-inside:avoid;break-inside:avoid;">
+                            <tbody>${[['Labour','₹450'],['Material','₹975'],['Transportation and Other','₹75']].map(r=>`<tr style="page-break-inside:avoid;break-inside:avoid;">${r.map((v,i)=>`<td style="border:1px solid #ddd;padding:7px;line-height:1.25;${i?'text-align:right;':''}">${v}</td>`).join('')}</tr>`).join('')}
+                            <tr style="font-weight:bold;background:#f2f2f2;page-break-inside:avoid;break-inside:avoid;"><td style="border:1px solid #ddd;padding:7px;line-height:1.25;">Total</td><td style="border:1px solid #ddd;padding:7px;text-align:right;line-height:1.25;">₹1500</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            const costBreakdownCustomerHtml = () => `
+                <div class="bg-gray-50 p-4 rounded-lg mt-4">
+                    <h2 class="text-lg font-semibold mb-3 text-gray-700">Material Cost (Per 1 Sq.ft.)</h2>
+                    <div class="overflow-x-auto"><table class="w-full text-sm border-collapse mb-5">
+                        <thead><tr class="bg-gray-200"><th class="border p-2 text-left">Material</th><th class="border p-2 text-right">Percentage</th><th class="border p-2 text-right">Cost</th></tr></thead>
+                        <tbody>${[['Cement','16.4%','₹246'],['Sand','12.3%','₹185'],['Aggregate','7.4%','₹111'],['Reinforcement (Steel)','24.6%','₹369'],['Finishers','16.5%','₹248'],['Fitting','22.8%','₹342']].map(r=>`<tr>${r.map((v,i)=>`<td class="border p-2 ${i?'text-right':''}">${v}</td>`).join('')}</tr>`).join('')}</tbody>
+                    </table></div>
+                    <h2 class="text-lg font-semibold mb-3 text-gray-700">Work Cost (Per 1 Sq.ft.)</h2>
+                    <div class="overflow-x-auto"><table class="w-full text-sm border-collapse mb-5">
+                        <thead><tr class="bg-gray-200"><th class="border p-2 text-left">Sr. No.</th><th class="border p-2 text-left">Work</th><th class="border p-2 text-right">Cost</th></tr></thead>
+                        <tbody>${[['Excavation','₹45'],['Foundation','₹180'],['RCC','₹345'],['Bricks Work','₹135'],['Plaster','₹90'],['Flooring','₹150'],['Electrical','₹120'],['Plumbing','₹105'],['Doors','₹60'],['Grill & Sliding Window','₹120'],['Paint','₹75'],['Transportation and Other','₹75']].map((r,i)=>`<tr><td class="border p-2">${i+1}</td><td class="border p-2">${r[0]}</td><td class="border p-2 text-right">${r[1]}</td></tr>`).join('')}</tbody>
+                    </table></div>
+                    <h2 class="text-lg font-semibold mb-3 text-gray-700">Labour And Material (Per 1 Sq.ft.)</h2>
+                    <table class="w-full text-sm border-collapse">
+                        <tbody>${[['Labour','₹450'],['Material','₹975'],['Transportation and Other','₹75']].map(r=>`<tr>${r.map((v,i)=>`<td class="border p-2 ${i?'text-right':''}">${v}</td>`).join('')}</tr>`).join('')}
+                        <tr class="font-bold bg-gray-200"><td class="border p-2">Total</td><td class="border p-2 text-right">₹1500</td></tr></tbody>
+                    </table>
+                </div>
+            `;
+
            // --- PDF Generation Function ---
             const generatePDF = (data) => {
                 const items = JSON.parse(data.items);
                 let itemsHtml = items.length > 0 ? items.map((item, index) => `
                     <tr>
                         <td style="border: 1px solid #ddd; padding: 8px; text-align: left;">${index + 1}</td>
-                        <td style="border: 1px solid #ddd; padding: 8px; text-align: left;">${item.name}<br>${item.description}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px; text-align: left;"><strong>${data.workTitle || ''}</strong>${item.name ? `<br>${item.name}` : ''}${getCleanItemDescription(item.description, data.workTitle) ? `<br>${getCleanItemDescription(item.description, data.workTitle)}` : ''}</td>
                         <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${item.quantity}</td>
                         <td style="border: 1px solid #ddd; padding: 8px; text-align: left;">${item.unit}</td>
                         <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₹ ${parseFloat(item.rate).toFixed(2)}</td>
@@ -464,6 +527,7 @@ erprizes.info" style="color: #333; text-decoration: none;">www.vaibhaventerprise
                                 </tbody>
                             </table>
                         </div>
+                        ${shouldShowCostBreakdown(data.workTitle) ? costBreakdownPdfHtml() : ''}
                         <div style="margin-top: 20px; display: flex; justify-content: flex-end;">
                             <div style="width: 40%;">
                                 <p style="margin: 0; display: flex; justify-content: space-between;"><span>Subtotal:</span><span>₹ ${parseFloat(data.subtotal).toFixed(2)}</span></p>
@@ -546,7 +610,7 @@ erprizes.info" style="color: #333; text-decoration: none;">www.vaibhaventerprise
                                             itemRow.className = 'read-only-item-row mb-2';
                                             itemRow.innerHTML = `
                                                 <div class="font-medium text-gray-800">${item.name || ''}</div>
-                                                ${item.description ? `<div class="text-sm text-gray-600 mb-2">${item.description}</div>` : ''}
+                                                ${getCleanItemDescription(item.description, estimateData.workTitle) ? `<div class="text-sm text-gray-600 mb-2">${getCleanItemDescription(item.description, estimateData.workTitle)}</div>` : ''}
                                                 <div class="text-sm text-gray-600">Qty: ${item.quantity || 0} ${item.unit || ''} | Rate: ₹ ${parseFloat(item.rate || 0).toFixed(2)} | Total: ₹ ${parseFloat(item.total || 0).toFixed(2)}</div>
                                             `;
                                             itemsContainerDisplay.appendChild(itemRow);
@@ -559,6 +623,10 @@ erprizes.info" style="color: #333; text-decoration: none;">www.vaibhaventerprise
                                     itemsContainerDisplay.innerHTML = '<p class="text-red-500">Error loading item details.</p>';
                                 }
                                 
+                                if (shouldShowCostBreakdown(estimateData.workTitle)) {
+                                    itemsContainerDisplay.insertAdjacentHTML('afterend', costBreakdownCustomerHtml());
+                                }
+
                                 acceptBtn.addEventListener('click', async () => {
     if (confirm('Are you sure you want to accept this estimate?')) {
         try {
