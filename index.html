@@ -476,7 +476,7 @@ const convertNumberToEnglishWords = (num) => {
                 let itemsHtml = items.length > 0 ? items.map((item, index) => `
                     <tr>
                         <td style="border: 1px solid #ddd; padding: 8px; text-align: left;">${index + 1}</td>
-                        <td style="border: 1px solid #ddd; padding: 8px; text-align: left;"><strong>${data.workTitle || ''}</strong>${item.name ? `<br>${item.name}` : ''}${getCleanItemDescription(item.description, data.workTitle) ? `<br>${getCleanItemDescription(item.description, data.workTitle)}` : ''}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px; text-align: left;">${index === 0 ? `<strong>${data.workTitle || ''}</strong>` : ''}${item.name ? `${index === 0 ? '<br>' : ''}${item.name}` : ''}${getCleanItemDescription(item.description, data.workTitle) ? `<br>${getCleanItemDescription(item.description, data.workTitle)}` : ''}</td>
                         <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">${item.quantity}</td>
                         <td style="border: 1px solid #ddd; padding: 8px; text-align: left;">${item.unit}</td>
                         <td style="border: 1px solid #ddd; padding: 8px; text-align: right;">₹ ${parseFloat(item.rate).toFixed(2)}</td>
