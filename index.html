@@ -46,6 +46,49 @@
             box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
         }
     </style>
+
+    <script type="module">
+        import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBaaV8A69XqckjnVuMCy6F5GyEuqRJvt_Y",
+            authDomain: "vaibhav-enterprises-ee336.firebaseapp.com",
+            projectId: "vaibhav-enterprises-ee336",
+            storageBucket: "vaibhav-enterprises-ee336.firebasestorage.app",
+            messagingSenderId: "172689572436",
+            appId: "1:172689572436:web:5a68b14a5fea0eb44fa3c1",
+            measurementId: "G-V4MFRFH744"
+        };
+
+        window.veSignatureStore = (async () => {
+            const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            const companyDoc = doc(db, "apps", "vaibhav_enterprises_data");
+
+            return {
+                async loadCompanySignature() {
+                    const snap = await getDoc(companyDoc);
+                    return snap.exists() ? (snap.data().companySignature || "") : "";
+                },
+                async loadCustomerSignature(estimateNumber) {
+                    const ref = doc(db, "apps", "vaibhav_enterprises_data", "estimateSignatures", String(estimateNumber));
+                    const snap = await getDoc(ref);
+                    return snap.exists() ? (snap.data().customerSignature || "") : "";
+                },
+                async saveCustomerSignature(estimateNumber, customerSignature, customerName) {
+                    const ref = doc(db, "apps", "vaibhav_enterprises_data", "estimateSignatures", String(estimateNumber));
+                    await setDoc(ref, {
+                        estimateNumber: String(estimateNumber),
+                        customerName: customerName || "",
+                        customerSignature,
+                        acceptedAt: new Date().toISOString()
+                    }, { merge: true });
+                }
+            };
+        })();
+    </script>
+
 </head>
 <body class="p-4 bg-gray-100 flex items-center justify-center min-h-screen">
     <div class="container-fluid bg-white p-6 rounded-xl shadow-lg w-full md:max-w-lg">
@@ -220,10 +263,19 @@
                     </div>
                 </div>
 
+
+                <div id="customer-signature-section" class="bg-gray-50 p-4 rounded-lg mt-4">
+                    <h2 class="text-xl font-semibold mb-2 text-gray-700">Customer Signature</h2>
+                    <p class="text-sm text-gray-600 mb-2">Please sign below to accept this estimate.</p>
+                    <canvas id="customer-signature-canvas" class="w-full bg-white border border-gray-300 rounded-lg" style="height:160px;touch-action:none;"></canvas>
+                    <button type="button" id="clear-customer-signature" class="mt-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium">Clear Signature</button>
+                    <p id="signature-status" class="text-xs text-gray-500 mt-2">Signature is required to accept the estimate.</p>
+                </div>
+
                 <div id="message-box-customer" class="hidden text-center text-sm p-3 rounded-lg font-medium"></div>
 
                 <div class="mt-4 grid grid-cols-2 gap-4">
-                    <button type="button" id="accept-btn" class="w-full bg-purple-500 text-white p-3 rounded-lg font-bold hover:bg-purple-600 transition duration-200">
+                    <button type="button" id="accept-btn" disabled class="w-full bg-purple-500 opacity-50 cursor-not-allowed text-white p-3 rounded-lg font-bold hover:bg-purple-600 transition duration-200">
                         Accept Estimate
                     </button>
                     <button type="button" id="download-pdf-btn" class="w-full bg-red-500 text-white p-3 rounded-lg font-bold hover:bg-red-600 transition duration-200">
@@ -471,7 +523,17 @@ const convertNumberToEnglishWords = (num) => {
             `;
 
            // --- PDF Generation Function ---
-            const generatePDF = (data) => {
+            const generatePDF = async (data, signatures = {}) => {
+                let companySignature = signatures.companySignature || '';
+                if (!companySignature) {
+                    try {
+                        const signatureStore = await window.veSignatureStore;
+                        companySignature = await signatureStore.loadCompanySignature();
+                    } catch (error) {
+                        console.error('Unable to load company signature from Firestore:', error);
+                    }
+                }
+                const customerSignature = signatures.customerSignature || '';
                 const items = JSON.parse(data.items);
                 let itemsHtml = items.length > 0 ? items.map((item, index) => `
                     <tr>
@@ -539,12 +601,13 @@ erprizes.info" style="color: #333; text-decoration: none;">www.vaibhaventerprise
                         <p style="margin-top: 10px; font-style: italic; text-align: right;">${convertNumberToEnglishWords(parseFloat(data.grandTotal))}</p>
                         <div style="margin-top: 40px; display: flex; justify-content: space-between; align-items: flex-end;">
                             <div>
+                                ${customerSignature ? `<img src="${customerSignature}" style="display:block;width:150px;height:55px;object-fit:contain;object-position:left bottom;margin-bottom:4px;">` : ''}
                                 <p style="margin: 0;">Customer Signature:</p>
-                                <div style="border-top: 1px solid #000; width: 150px; margin-top: 20px;"></div>
+                                <div style="border-top: 1px solid #000; width: 150px; margin-top: 8px;"></div>
                             </div>
                             <div style="text-align: right;">
+                                ${companySignature ? `<img src="${companySignature}" style="display:block;width:150px;height:55px;object-fit:contain;margin-left:auto;margin-bottom:4px;">` : '<div style="height:55px;"></div>'}
                                 <p style="margin: 0; font-weight: bold;">For Vaibhav Enterprises</p>
-                                <div style="height: 50px;"></div>
                                 <div style="border-top: 1px solid #000; width: 150px; margin-left: auto; margin-top: 10px;"></div>
                                 <p style="margin: 5px 0 0;">(Authorized Signature)</p>
                             </div>
@@ -572,9 +635,89 @@ erprizes.info" style="color: #333; text-decoration: none;">www.vaibhaventerprise
                 const downloadPdfBtn = document.getElementById('download-pdf-btn');
                 const estimateId = urlParams.get('id');
                 let estimateData = null;
+                const signatureCanvas = document.getElementById('customer-signature-canvas');
+                const signatureCtx = signatureCanvas.getContext('2d');
+                const clearSignatureBtn = document.getElementById('clear-customer-signature');
+                const signatureStatus = document.getElementById('signature-status');
+                let customerSignatureData = '';
+                let isSigning = false;
+
+                const resizeSignatureCanvas = () => {
+                    const rect = signatureCanvas.getBoundingClientRect();
+                    const ratio = window.devicePixelRatio || 1;
+                    const previous = customerSignatureData;
+                    signatureCanvas.width = Math.max(1, Math.round(rect.width * ratio));
+                    signatureCanvas.height = Math.max(1, Math.round(160 * ratio));
+                    signatureCtx.setTransform(ratio, 0, 0, ratio, 0, 0);
+                    signatureCtx.lineWidth = 2.2;
+                    signatureCtx.lineCap = 'round';
+                    signatureCtx.lineJoin = 'round';
+                    signatureCtx.strokeStyle = '#111827';
+                    if (previous) drawSavedSignature(previous);
+                };
+
+                const drawSavedSignature = (dataUrl) => {
+                    if (!dataUrl) return;
+                    const image = new Image();
+                    image.onload = () => {
+                        const rect = signatureCanvas.getBoundingClientRect();
+                        signatureCtx.clearRect(0, 0, rect.width, 160);
+                        signatureCtx.drawImage(image, 0, 0, rect.width, 160);
+                    };
+                    image.src = dataUrl;
+                };
+
+                const updateSignatureState = () => {
+                    const hasSignature = !!customerSignatureData;
+                    acceptBtn.disabled = !hasSignature;
+                    acceptBtn.classList.toggle('opacity-50', !hasSignature);
+                    acceptBtn.classList.toggle('cursor-not-allowed', !hasSignature);
+                    signatureStatus.textContent = hasSignature
+                        ? 'Signature added. You can now accept this estimate.'
+                        : 'Signature is required to accept the estimate.';
+                };
+
+                const getCanvasPoint = (event) => {
+                    const rect = signatureCanvas.getBoundingClientRect();
+                    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+                };
+
+                signatureCanvas.addEventListener('pointerdown', (event) => {
+                    isSigning = true;
+                    signatureCanvas.setPointerCapture(event.pointerId);
+                    const point = getCanvasPoint(event);
+                    signatureCtx.beginPath();
+                    signatureCtx.moveTo(point.x, point.y);
+                });
+                signatureCanvas.addEventListener('pointermove', (event) => {
+                    if (!isSigning) return;
+                    const point = getCanvasPoint(event);
+                    signatureCtx.lineTo(point.x, point.y);
+                    signatureCtx.stroke();
+                    customerSignatureData = signatureCanvas.toDataURL('image/png');
+                    updateSignatureState();
+                });
+                const finishSigning = () => {
+                    if (!isSigning) return;
+                    isSigning = false;
+                    customerSignatureData = signatureCanvas.toDataURL('image/png');
+                    updateSignatureState();
+                };
+                signatureCanvas.addEventListener('pointerup', finishSigning);
+                signatureCanvas.addEventListener('pointercancel', finishSigning);
+                clearSignatureBtn.addEventListener('click', () => {
+                    const rect = signatureCanvas.getBoundingClientRect();
+                    signatureCtx.clearRect(0, 0, rect.width, 160);
+                    customerSignatureData = '';
+                    updateSignatureState();
+                });
+                resizeSignatureCanvas();
+                window.addEventListener('resize', resizeSignatureCanvas);
+                updateSignatureState();
+
                 if (estimateId) {
                     getEstimateFromSheet('getsingle', estimateId)
-                        .then(data => {
+                        .then(async data => {
                             // Check if data is received and contains the required fields
                             if (data && data['Estimate Number']) {
                                 estimateData = {
@@ -589,6 +732,14 @@ erprizes.info" style="color: #333; text-decoration: none;">www.vaibhaventerprise
                                     grandTotal: data['Grand Total'] || 0,
                                     creatorWhatsapp: data['Your WhatsApp Number'] || ''
                                 };
+                                try {
+                                    const signatureStore = await window.veSignatureStore;
+                                    customerSignatureData = await signatureStore.loadCustomerSignature(estimateData.estimateNumber);
+                                    if (customerSignatureData) drawSavedSignature(customerSignatureData);
+                                    updateSignatureState();
+                                } catch (signatureError) {
+                                    console.error('Unable to load saved customer signature:', signatureError);
+                                }
                                 // Update the display elements with the fetched data
                                 document.getElementById('work-title-display').textContent = estimateData.workTitle;
                                 document.getElementById('customer-name-display').textContent = estimateData.customerName;
@@ -628,44 +779,71 @@ erprizes.info" style="color: #333; text-decoration: none;">www.vaibhaventerprise
                                 }
 
                                 acceptBtn.addEventListener('click', async () => {
-    if (confirm('Are you sure you want to accept this estimate?')) {
-        try {
-            const payload = new FormData();
-            payload.append('action', 'accept');
-            payload.append('estimateNumber', estimateData.estimateNumber);
+                                    if (!customerSignatureData) {
+                                        showMessage(messageBoxCustomer, 'Please sign before accepting this estimate.', 'red');
+                                        updateSignatureState();
+                                        return;
+                                    }
+                                    if (confirm('Are you sure you want to accept this estimate?')) {
+                                        try {
+                                            showLoading();
+                                            const signatureStore = await window.veSignatureStore;
+                                            await signatureStore.saveCustomerSignature(
+                                                estimateData.estimateNumber,
+                                                customerSignatureData,
+                                                estimateData.customerName
+                                            );
 
-            const response = await fetch(googleScriptUrl, {
-                method: 'POST',
-                body: payload,
-            });
+                                            const payload = new FormData();
+                                            payload.append('action', 'accept');
+                                            payload.append('estimateNumber', estimateData.estimateNumber);
 
-            const result = await response.json();
+                                            const response = await fetch(googleScriptUrl, {
+                                                method: 'POST',
+                                                body: payload,
+                                            });
+                                            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                                            const result = await response.json();
 
-            if (result.status === 'success') {
-                let message = `Hello, Estimate number ${estimateData.estimateNumber} has been accepted by the customer.`;
-                if (estimateData.creatorWhatsapp) {
-                    const whatsappUrl = `https://wa.me/${estimateData.creatorWhatsapp}?text=${encodeURIComponent(message)}`;
-                    window.open(whatsappUrl, '_blank');
-                }
-                showMessage(messageBoxCustomer, 'Estimate accepted successfully!', 'green');
-                acceptBtn.disabled = true;
-                acceptBtn.textContent = 'Accepted';
-                acceptBtn.classList.remove('bg-purple-500', 'hover:bg-purple-600');
-                acceptBtn.classList.add('bg-gray-400');
-            } else {
-                showMessage(messageBoxCustomer, 'Failed to accept estimate. Please try again.', 'red');
-            }
-        } catch (error) {
-            console.error('Error accepting estimate:', error);
-            showMessage(messageBoxCustomer, 'Error while accepting the estimate.', 'red');
-        }
-    }
-});
+                                            if (result.status === 'success') {
+                                                let message = `Hello, Estimate number ${estimateData.estimateNumber} has been accepted by the customer.`;
+                                                if (estimateData.creatorWhatsapp) {
+                                                    const whatsappUrl = `https://wa.me/${estimateData.creatorWhatsapp}?text=${encodeURIComponent(message)}`;
+                                                    window.open(whatsappUrl, '_blank');
+                                                }
+                                                showMessage(messageBoxCustomer, 'Estimate accepted successfully! Your signature has been saved.', 'green');
+                                                acceptBtn.disabled = true;
+                                                acceptBtn.textContent = 'Accepted';
+                                                acceptBtn.classList.remove('bg-purple-500', 'hover:bg-purple-600', 'opacity-50', 'cursor-not-allowed');
+                                                acceptBtn.classList.add('bg-gray-400');
+                                                document.getElementById('customer-signature-section').classList.add('opacity-75');
+                                            } else {
+                                                showMessage(messageBoxCustomer, 'Signature saved, but the estimate could not be accepted. Please try again.', 'red');
+                                            }
+                                        } catch (error) {
+                                            console.error('Error accepting estimate or saving signature:', error);
+                                            showMessage(messageBoxCustomer, 'Could not save the signature or accept the estimate. Please check your connection and try again.', 'red');
+                                        } finally {
+                                            hideLoading();
+                                        }
+                                    }
+                                });
 
-                                downloadPdfBtn.addEventListener('click', () => {
+                                downloadPdfBtn.addEventListener('click', async () => {
                                     if (estimateData) {
-                                        generatePDF(estimateData);
-                                        showMessage(messageBoxCustomer, 'PDF is being downloaded.', 'green');
+                                        try {
+                                            const signatureStore = await window.veSignatureStore;
+                                            const companySignature = await signatureStore.loadCompanySignature();
+                                            const savedCustomerSignature = await signatureStore.loadCustomerSignature(estimateData.estimateNumber);
+                                            await generatePDF(estimateData, {
+                                                customerSignature: savedCustomerSignature || customerSignatureData,
+                                                companySignature
+                                            });
+                                            showMessage(messageBoxCustomer, 'PDF is being downloaded.', 'green');
+                                        } catch (error) {
+                                            console.error('Error preparing signed PDF:', error);
+                                            showMessage(messageBoxCustomer, 'Unable to load signatures for the PDF. Please try again.', 'red');
+                                        }
                                     }
                                 });
                             } else {
